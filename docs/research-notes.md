@@ -1,6 +1,6 @@
 # Research notes — Equalizer APO (T0.2 spike)
 
-> **Status**: Desk research, **re-graded 2026-06-10 against the canonical internal references** that now ship in this repo (issue #2):
+> **Status**: Desk research, **re-graded 2026-06-10 against the canonical internal references** that now ship in this repo ([#2](https://gitlab.com/paburukunsempai-group/YesMicGain/-/work_items/2)):
 > - `docs/internal/apo-config-reference.md` — cited below as **config-ref**
 > - `docs/internal/apo-development-reference.md` — cited below as **dev-ref**
 > - `docs/internal/apo-install-troubleshooting-reference.md` — cited below as **install-ref**
