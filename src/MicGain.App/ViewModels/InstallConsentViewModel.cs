@@ -4,7 +4,7 @@ using MicGain.Core.Services;
 namespace MicGain.App.ViewModels;
 
 /// <summary>
-/// ViewModel for the install-consent dialog (T2.1 / issue #6). Detects the default output
+/// ViewModel for the install-consent dialog (T2.1 / <see href="https://gitlab.com/paburukunsempai-group/YesMicGain/-/work_items/3">#3</see>). Detects the default output
 /// device via <see cref="IAudioDeviceService"/>, names it in the consent message, and drives
 /// the pure <see cref="InstallConsentStateMachine"/> from MicGain.Core.
 /// Performs no system changes whatsoever — install logic is T2.2 (AGENTS.md rule 2).
@@ -64,15 +64,20 @@ public sealed class InstallConsentViewModel : ViewModelBase
         // Acceptance criterion 3: name the ACTUAL default output device. If no endpoint is
         // flagged as default (rare — e.g. the enumerator could not resolve it), fall back to
         // the first active render device. Disabled-vs-unplugged edge cases are
-        // NEEDS-VM-VERIFICATION (issue #6).
+        // NEEDS-VM-VERIFICATION (#3).
         var defaultDevice = renderDevices.FirstOrDefault(d => d.IsDefaultDevice) ?? renderDevices[0];
         StateMachine.BeginConsent(defaultDevice);
         ConsentMessage =
             "Equalizer APO is not installed.\n\n" +
             "MicGain can install it for your default output device:\n\n" +
             $"        {defaultDevice.FriendlyName}\n\n" +
-            "Installing changes system audio processing, requires administrator approval, and " +
-            "needs the Windows audio service to restart. Nothing happens without your consent.";
+            "Installing will make the following changes to your system:\n" +
+            "  • Install Equalizer APO (GPLv2) into Program Files\n" +
+            "  • Register it as an audio processor for the device above\n" +
+            "  • Disable the Windows APO signature check system-wide\n" +
+            "    (sets DisableProtectedAudioDG=1 — this affects all audio apps)\n" +
+            "  • Restart the Windows Audio service\n\n" +
+            "Administrator approval is required. Nothing happens without your consent.";
         NotifyStateChanged();
     }
 
