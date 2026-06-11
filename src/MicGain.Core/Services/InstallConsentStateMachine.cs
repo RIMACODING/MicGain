@@ -3,15 +3,17 @@ using MicGain.Core.Models;
 namespace MicGain.Core.Services;
 
 /// <summary>
-/// Pure state machine for the install-consent flow (T2.1 / issue #6, MAIN PLAN T2.1).
+/// Pure state machine for the install flow (T2.1 consent — issue #3; T2.2 install — issue #4).
 /// Allowed transitions:
 /// <code>
 /// ApoNotInstalled → AwaitingConsent   (BeginConsent — default output device known)
 /// ApoNotInstalled → NoDevice          (ReportNoOutputDevice)
 /// AwaitingConsent → Declined          (Decline)
-/// AwaitingConsent → Ready             (Accept — stub; T2.2 inserts Installing)
+/// AwaitingConsent → Installing        (Accept — consent given, T2.2 install flow runs)
+/// Installing      → Ready             (CompleteInstall)
+/// Installing      → InstallFailed     (FailInstall — failed/abandoned, changes rolled back)
 /// </code>
-/// NoDevice, Declined and Ready are terminal. Invalid transitions throw
+/// NoDevice, Declined, InstallFailed and Ready are terminal. Invalid transitions throw
 /// <see cref="InvalidOperationException"/> — the flow can never skip the consent step
 /// (AGENTS.md rule 2: no system change without explicit consent).
 /// Pure C#: no UI references, no registry/FS/audio access (AGENTS.md rules 3 and 6).
@@ -24,7 +26,8 @@ public sealed class InstallConsentStateMachine
     public AudioDeviceInfo? DefaultOutputDevice { get; private set; }
 
     public bool IsTerminal =>
-        State is InstallFlowState.NoDevice or InstallFlowState.Declined or InstallFlowState.Ready;
+        State is InstallFlowState.NoDevice or InstallFlowState.Declined
+              or InstallFlowState.InstallFailed or InstallFlowState.Ready;
 
     /// <summary>Starts the consent step for the given default output (render) device.</summary>
     public void BeginConsent(AudioDeviceInfo defaultOutputDevice)
@@ -56,13 +59,28 @@ public sealed class InstallConsentStateMachine
     }
 
     /// <summary>
-    /// User consented. Stub transition straight to <see cref="InstallFlowState.Ready"/> —
-    /// T2.2 will insert the Installing state and the actual install logic here.
+    /// User consented — the T2.2 install flow (<see cref="IApoInstallService"/>, issue #4)
+    /// now runs. Each individual system change still requires its own consent
+    /// (<see cref="IInstallInteraction"/>).
     /// </summary>
     public void Accept()
     {
         Require(InstallFlowState.AwaitingConsent, nameof(Accept));
+        State = InstallFlowState.Installing;
+    }
+
+    /// <summary>Install flow finished successfully (possibly pending an audio-service restart).</summary>
+    public void CompleteInstall()
+    {
+        Require(InstallFlowState.Installing, nameof(CompleteInstall));
         State = InstallFlowState.Ready;
+    }
+
+    /// <summary>Install flow failed or was abandoned mid-way (changes rolled back) — terminal.</summary>
+    public void FailInstall()
+    {
+        Require(InstallFlowState.Installing, nameof(FailInstall));
+        State = InstallFlowState.InstallFailed;
     }
 
     private void Require(InstallFlowState expected, string action)

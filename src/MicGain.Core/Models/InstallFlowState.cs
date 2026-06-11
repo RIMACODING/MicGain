@@ -1,9 +1,7 @@
 namespace MicGain.Core.Models;
 
 /// <summary>
-/// States of the install-consent flow (T2.1 / issue #6). T2.2 will insert an
-/// <c>Installing</c> state between <see cref="AwaitingConsent"/> and <see cref="Ready"/>
-/// when the actual install logic lands.
+/// States of the install flow (T2.1 consent — issue #3; T2.2 install — issue #4).
 /// </summary>
 public enum InstallFlowState
 {
@@ -19,6 +17,12 @@ public enum InstallFlowState
     /// <summary>User declined — terminal; the app exits cleanly with zero system changes.</summary>
     Declined,
 
-    /// <summary>User consented — terminal stub in T2.1 (no install logic yet, see T2.2).</summary>
+    /// <summary>User consented; the T2.2 install flow (issue #4) is running.</summary>
+    Installing,
+
+    /// <summary>Install failed or was abandoned (changes rolled back) — terminal.</summary>
+    InstallFailed,
+
+    /// <summary>Install completed — terminal; the app can proceed to the main window.</summary>
     Ready,
 }
