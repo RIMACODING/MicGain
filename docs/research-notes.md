@@ -209,9 +209,9 @@ A device is **APO-enabled** iff:
 
 A device has a **backup** iff `HKLM\SOFTWARE\EqualizerAPO\Child APOs\{guid}` exists.
 
-### audiosrv restart sufficiency — NEEDS-VM-VERIFICATION (not tested this session)
+### audiosrv restart sufficiency — VM-VERIFIED ✅
 
-Not tested in this session — reboot behavior after Configurator close was not observed. Flag remains.
+`Restart-Service audiosrv -Force` is sufficient to activate a newly enabled APO device. A full reboot is **not required**. `ApoInstallService` must prompt the user for consent before restarting the service, then call `Restart-Service audiosrv` (or `ServiceController.Stop`/`Start` via BCL).
 
 ## 9. Open items checklist (feeds T0.1 VM session)
 
