@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MicGain.Core</RootNamespace>
+    
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Audio device enumeration per AGENTS.md stack rules (NAudio MMDeviceEnumerator). -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>
