@@ -78,15 +78,57 @@ public sealed class InstallConsentStateMachineTests
     }
 
     [Fact]
-    public void Accept_FromAwaitingConsent_TransitionsToTerminalReadyStub()
+    public void Accept_FromAwaitingConsent_TransitionsToInstalling_NotTerminal()
     {
+        // T2.2 (issue #4): Accept no longer jumps straight to Ready — the install flow runs.
         var machine = new InstallConsentStateMachine();
         machine.BeginConsent(Speakers());
 
         machine.Accept();
 
+        Assert.Equal(InstallFlowState.Installing, machine.State);
+        Assert.False(machine.IsTerminal);
+    }
+
+    [Fact]
+    public void CompleteInstall_FromInstalling_TransitionsToTerminalReady()
+    {
+        var machine = new InstallConsentStateMachine();
+        machine.BeginConsent(Speakers());
+        machine.Accept();
+
+        machine.CompleteInstall();
+
         Assert.Equal(InstallFlowState.Ready, machine.State);
         Assert.True(machine.IsTerminal);
+    }
+
+    [Fact]
+    public void FailInstall_FromInstalling_TransitionsToTerminalInstallFailed()
+    {
+        var machine = new InstallConsentStateMachine();
+        machine.BeginConsent(Speakers());
+        machine.Accept();
+
+        machine.FailInstall();
+
+        Assert.Equal(InstallFlowState.InstallFailed, machine.State);
+        Assert.True(machine.IsTerminal);
+    }
+
+    [Fact]
+    public void CompleteOrFailInstall_OutsideInstalling_Throws()
+    {
+        var machine = new InstallConsentStateMachine();
+
+        Assert.Throws<InvalidOperationException>(machine.CompleteInstall);
+        Assert.Throws<InvalidOperationException>(machine.FailInstall);
+
+        machine.BeginConsent(Speakers());
+
+        Assert.Throws<InvalidOperationException>(machine.CompleteInstall);
+        Assert.Throws<InvalidOperationException>(machine.FailInstall);
+        Assert.Equal(InstallFlowState.AwaitingConsent, machine.State);
     }
 
     [Fact]
@@ -120,7 +162,8 @@ public sealed class InstallConsentStateMachineTests
         Assert.Equal(InstallFlowState.AwaitingConsent, machine.State);
     }
 
-    public static TheoryData<string> TerminalSetups => new() { "declined", "accepted", "no-device" };
+    public static TheoryData<string> TerminalSetups =>
+        new() { "declined", "install-completed", "install-failed", "no-device" };
 
     [Theory]
     [MemberData(nameof(TerminalSetups))]
@@ -133,9 +176,15 @@ public sealed class InstallConsentStateMachineTests
                 machine.BeginConsent(Speakers());
                 machine.Decline();
                 break;
-            case "accepted":
+            case "install-completed":
                 machine.BeginConsent(Speakers());
                 machine.Accept();
+                machine.CompleteInstall();
+                break;
+            case "install-failed":
+                machine.BeginConsent(Speakers());
+                machine.Accept();
+                machine.FailInstall();
                 break;
             case "no-device":
                 machine.ReportNoOutputDevice();
@@ -149,6 +198,8 @@ public sealed class InstallConsentStateMachineTests
         Assert.Throws<InvalidOperationException>(machine.ReportNoOutputDevice);
         Assert.Throws<InvalidOperationException>(machine.Accept);
         Assert.Throws<InvalidOperationException>(machine.Decline);
+        Assert.Throws<InvalidOperationException>(machine.CompleteInstall);
+        Assert.Throws<InvalidOperationException>(machine.FailInstall);
         Assert.Equal(terminalState, machine.State);
     }
 }
