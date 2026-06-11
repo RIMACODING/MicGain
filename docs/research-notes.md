@@ -112,6 +112,17 @@ Core Audio `IMMDevice::GetId` returns IDs like `{0.0.0.00000000}.{guid}` (render
 | Error log: `C:\Windows\ServiceProfiles\LocalService\AppData\Local\Temp\EqualizerAPO.log` — only created when an error occurs. Trace mode: set `EnableTrace` to `true` under `HKLM\SOFTWARE\EqualizerAPO` (set back to `false` afterwards). Useful for a future diagnostics feature and for VM verification sessions. | **[DOC]** (install-ref §Troubleshooting → Log files) | — |
 | Hardware-accelerated OpenAL bypasses APOs entirely (vendor `*_oal.dll`); out of scope for MVP, note for support docs only. | **[DOC]** (install-ref §Troubleshooting → Hardware-accelerated OpenAL) | — |
 
+## 10. T2.1 VM verification — device state detection (2026-06-11)
+
+| Finding | Confidence | Verification |
+|---|---|---|
+| `Active` (state=1) and `Unplugged` (state=8) are distinct and reliably readable from `MMDevices\Audio\Render\{guid}` `DeviceState` registry value. | **[VM-VERIFIED]** | ✅ Confirmed on Win11 with Audient USB + Steam virtual speakers + Realtek HDA |
+| `Disabled` (state=2) could not be triggered on the test VM — Audient virtual endpoints and Steam virtual speakers are protected and resist disabling via Sound settings. Registry did not update after `AudioSrv` restart or full reboot. | **[VM-VERIFIED — PARTIAL]** | Needs a machine with a standard disableable physical output (e.g. laptop built-in speakers). `NEEDS-VM-VERIFICATION` remains. |
+| Registry `DeviceState` lags behind actual device state — does not update reliably without a full reboot. `AudioDeviceService` MUST use `IMMDeviceEnumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)` (live COM API) rather than direct registry reads. | **[VM-VERIFIED]** | ✅ Confirmed — registry showed stale Active state for manually disabled devices even after service restart and reboot |
+| Friendly name is readable via `PKEY_Device_FriendlyName` = `{a45c254e-df1c-4efd-8020-67d146a850e0},2` in the device's `Properties` subkey. Returns human-readable strings (e.g. "Altavoces", "Loop-back 1/2"). | **[VM-VERIFIED]** | ✅ Confirmed |
+| Multiple active output devices (3) confirmed simultaneously on test VM. `GetDefaultAudioEndpoint(eRender, eConsole)` will return a meaningful friendly name for the consent dialog. | **[VM-VERIFIED]** | ✅ Confirmed — consent dialog naming test is valid on multi-device machines |
+| Phantom/NotPresent entries (high-bit `DeviceState` flags: `0x20000004`, `0x10000004`) are abundant in the registry but are automatically excluded by `IMMDeviceEnumerator` — no extra filtering needed in `AudioDeviceService`. | **[VM-VERIFIED]** | ✅ Confirmed |
+
 ## 9. Open items checklist (feeds T0.1 VM session)
 
 Items below now have **documented expectations** (cite) where available — the VM session confirms reality matches the docs:
