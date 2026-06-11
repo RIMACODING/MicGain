@@ -123,6 +123,96 @@ Core Audio `IMMDevice::GetId` returns IDs like `{0.0.0.00000000}.{guid}` (render
 | Multiple active output devices (3) confirmed simultaneously on test VM. `GetDefaultAudioEndpoint(eRender, eConsole)` will return a meaningful friendly name for the consent dialog. | **[VM-VERIFIED]** | ✅ Confirmed — consent dialog naming test is valid on multi-device machines |
 | Phantom/NotPresent entries (high-bit `DeviceState` flags: `0x20000004`, `0x10000004`) are abundant in the registry but are automatically excluded by `IMMDeviceEnumerator` — no extra filtering needed in `AudioDeviceService`. | **[VM-VERIFIED]** | ✅ Confirmed |
 
+## 11. T2.2 VM verification — FxProperties diff, Child APOs format, installer /S (2026-06-11)
+
+### Installer `/S` flag behavior — VM-VERIFIED ✅
+
+- `EqualizerAPO-x64-1.4.2.exe /S` does **NOT** suppress the Configurator/device selector window.
+- The APO Device Selector (Configurator) launches interactively even under `/S`.
+- **Conclusion**: `/S` only suppresses the NSIS installer UI; the Configurator launch is a separate post-install step that cannot be silenced via `/S` alone.
+- **Impact on T2.2**: the "primary path" of fully silent install is not achievable via `/S` alone. Options:
+  1. **Guided Configurator launch** (fallback, now promoted to primary for MVP): run installer, then show on-screen guidance telling user to select their device in Configurator and click Close.
+  2. **Direct registry write** (advanced): skip Configurator entirely, write `FxProperties` directly after installer completes. Requires the exact values confirmed below.
+- Exit code and reboot behavior: `NEEDS-VM-VERIFICATION` (reboot prompt not observed in this session).
+
+### Equalizer APO install path — VM-VERIFIED ✅
+
+- `InstallPath` = `C:\Program Files\EqualizerAPO` ✅ (matches install-ref)
+- `ConfigPath` = `C:\Program Files\EqualizerAPO\config` ✅ (matches config-ref)
+- `EnableTrace` = `false` (default) ✅
+- Version string: `Equalizer APO 1.4.2`
+
+### Equalizer APO CLSID — VM-VERIFIED ✅
+
+- **LFX (pre-mix) CLSID**: `{EACD2258-FCAC-4FF4-B36D-419E924A6D79}` — written to `,5` on the enabled device.
+- **GFX (post-mix) CLSID**: `{637c490d-eee3-4c0a-973f-371958802da2}` — written to `,6` on all devices (appears to be a shared/default GFX APO, not Equalizer APO's own).
+- **Vendor/default LFX CLSID** (pre-existing on non-enabled devices): `{62dc1a93-ae24-464c-a43e-452f824c4250}`
+- **Detection heuristic confirmed**: a device has Equalizer APO enabled iff `,5` = `{EACD2258-FCAC-4FF4-B36D-419E924A6D79}`. Check `,5` first; if absent fall back to `,1`.
+
+### FxProperties layout — VM-VERIFIED ✅
+
+All values are under `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\{device-guid}\FxProperties`.
+
+Value name key: `{d04e05a6-594b-4fb6-a80d-01af5eed7d1d}` (confirmed as the FxProperties GUID).
+
+**APO-enabled device (`{d7292d39-0793-4521-b087-d76d9cc2c43f}`) — Win8.1+ format (no `,1`/`,2`):**
+
+| Value | Data | Meaning |
+|---|---|---|
+| `,0` | `{00000000-0000-0000-0000-000000000000}` | Null/unused |
+| `,3` | `{5860E1C5-F95C-4a7a-8EC8-8AEF24F379A1}` | EFX APO CLSID |
+| `,5` | `{EACD2258-FCAC-4FF4-B36D-419E924A6D79}` | **LFX = Equalizer APO** ✅ |
+| `,6` | `{637c490d-eee3-4c0a-973f-371958802da2}` | GFX APO CLSID |
+| `,7` | `{EC1CC9CE-FAED-4822-828A-82A81A6F018F}` | EFX2 / additional slot |
+
+**Non-enabled devices with both old+new format (e.g. `{0116f90d...}`, `{b92d0bd5...}`):**
+
+| Value | Data |
+|---|---|
+| `,0` | `{00000000-0000-0000-0000-000000000000}` |
+| `,1` | `{62dc1a93-ae24-464c-a43e-452f824c4250}` (vendor LFX) |
+| `,2` | `{637c490d-eee3-4c0a-973f-371958802da2}` (vendor GFX) |
+| `,3` | `{5860E1C5-F95C-4a7a-8EC8-8AEF24F379A1}` |
+| `,5` | `{62dc1a93-ae24-464c-a43e-452f824c4250}` (vendor LFX, same as `,1`) |
+| `,6` | `{637c490d-eee3-4c0a-973f-371958802da2}` (vendor GFX, same as `,2`) |
+
+**Non-enabled devices with only new format (`,5`/`,6` only, no `,1`/`,2`):** majority of devices on this machine.
+
+**Devices with `{DFF21CE1-F70F-11D0-B917-00A0C9223196}` in `,0`**: likely a different vendor APO class — do not overwrite without backing up.
+
+### Child APOs backup format — VM-VERIFIED ✅
+
+Location: `HKLM\SOFTWARE\EqualizerAPO\Child APOs\{device-guid}`
+
+Two devices were backed up (`{12d9b0a0...}` and `{d7292d39...}`). Each subkey contains:
+
+| Value name | Type | Example data | Meaning |
+|---|---|---|---|
+| `{d04e05a6-...},1` | REG_SZ | `{62dc1a93-ae24-464c-a43e-452f824c4250}` | Pre-existing LFX (old slot) |
+| `{d04e05a6-...},2` | REG_SZ | `{637c490d-eee3-4c0a-973f-371958802da2}` | Pre-existing GFX (old slot) |
+| `{d04e05a6-...},5` | REG_SZ | `{62dc1a93-ae24-464c-a43e-452f824c4250}` | Pre-existing LFX (new slot) |
+| `{d04e05a6-...},6` | REG_SZ | `{637c490d-eee3-4c0a-973f-371958802da2}` | Pre-existing GFX (new slot) |
+| `{d04e05a6-...},7` | REG_SZ | `!VALUE` | Sentinel / placeholder |
+| `PreMixChild` | REG_SZ | `{62dc1a93-ae24-464c-a43e-452f824c4250}` | Pre-existing pre-mix APO |
+| `PostMixChild` | REG_SZ | *(empty)* | Pre-existing post-mix APO (none) |
+| `AllowSilentBufferModification` | REG_SZ | `false` | |
+| `Version` | REG_SZ | `2` | Backup schema version |
+
+**Rollback procedure**: to restore a device, copy all `{d04e05a6-...},N` values from `Child APOs\{guid}` back to `FxProperties\{guid}`, then delete the `Child APOs\{guid}` subkey.
+
+### ApoDetectionService detection logic — confirmed implementation spec
+
+A device is **APO-enabled** iff:
+1. Read `FxProperties\{d04e05a6-...},5` — if equals `{EACD2258-FCAC-4FF4-B36D-419E924A6D79}` → **enabled**
+2. Else read `,1` — if equals `{EACD2258-FCAC-4FF4-B36D-419E924A6D79}` → **enabled** (legacy)
+3. Otherwise → **not enabled**
+
+A device has a **backup** iff `HKLM\SOFTWARE\EqualizerAPO\Child APOs\{guid}` exists.
+
+### audiosrv restart sufficiency — NEEDS-VM-VERIFICATION (not tested this session)
+
+Not tested in this session — reboot behavior after Configurator close was not observed. Flag remains.
+
 ## 9. Open items checklist (feeds T0.1 VM session)
 
 Items below now have **documented expectations** (cite) where available — the VM session confirms reality matches the docs:
