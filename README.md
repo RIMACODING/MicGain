@@ -1,6 +1,6 @@
 # MicGain MVP
 
-Windows desktop utility that controls per-device microphone gain by writing `Preamp:` lines into Equalizer APO config files.
+Windows desktop utility that controls per-device microphone gain by writing `Preamp:` lines into Equalizer APO config files. This is basically useful to increase volume on your microphone without the need for a FET amp or similar hardware.
 
 ## How to use
 
