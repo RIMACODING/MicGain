@@ -22,7 +22,3 @@ app/              ← compiled app + all dependencies
 run.bat           ← launcher
 README.md
 ```
-
-## Build from source
-
-Source code is in the `main` branch of the [original repository](https://gitlab.com/arrow1655269pablo-group/arrow1655269pablo-project).
