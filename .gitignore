@@ -76,3 +76,14 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
+
+# Agent session files
+.claude/
+.cursor/
+.gemini/
+.kiro/
+.clinerules
+.windsurfrules
+CLAUDE.md
+opencode.json
+repo-map.md

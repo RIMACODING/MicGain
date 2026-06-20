@@ -195,9 +195,71 @@ public sealed class ApoInstallService : IApoInstallService
     // Detection (AC5)
     // -----------------------------------------------------------------------------------------
 
+    // -----------------------------------------------------------------------------------------
+    // Configurator-only launch (APO already installed, no devices enabled)
+    // -----------------------------------------------------------------------------------------
+
+    public async Task<InstallOutcome> RunConfiguratorOnlyAsync(
+        AudioDeviceInfo device,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+
+        // Resolve Configurator.exe from the APO install directory (parent of configPath).
+        // The config directory is at <InstallPath>\config; Configurator is at <InstallPath>\.
+        var configDir = _registry.GetLocalMachineString(
+            ApoDetectionService.EqualizerApoKeyPath, ApoDetectionService.ConfigPathValueName);
+        if (string.IsNullOrWhiteSpace(configDir))
+        {
+            return InstallOutcome.InstallerNotFound; // APO not installed — should not happen here
+        }
+
+        var installDir = Path.GetDirectoryName(configDir);
+        if (string.IsNullOrWhiteSpace(installDir))
+        {
+            return InstallOutcome.InstallerNotFound;
+        }
+
+        var configuratorPath = Path.Combine(installDir, "Configurator.exe");
+        if (!_fileSystem.FileExists(configuratorPath))
+        {
+            return InstallOutcome.InstallerNotFound;
+        }
+
+        // AGENTS.md rule 2: running Configurator (elevated) is a system change → consent first.
+        if (!await _interaction.ConfirmSystemChangeAsync(
+                SystemChange.RunConfigurator,
+                $"Equalizer APO is installed but not enabled on any input device.\n\n" +
+                $"Launch the Configurator to enable it on the selected device:\n" +
+                $"  {device.FriendlyName} ({device.EndpointGuid})\n\n" +
+                $"The Configurator requires administrator approval."
+            ).ConfigureAwait(false))
+        {
+            return InstallOutcome.ConsentDeclined;
+        }
+
+        var exitCode = await _processRunner
+            .RunElevatedAsync(configuratorPath, "", cancellationToken)
+            .ConfigureAwait(false);
+
+        if (exitCode == IProcessRunner.UacCancelledExitCode)
+        {
+            return InstallOutcome.ConsentDeclined;
+        }
+
+        await _interaction.WaitForConfiguratorAsync(device).ConfigureAwait(false);
+
+        if (!IsDeviceEnabled(device))
+        {
+            return InstallOutcome.DeviceNotEnabled;
+        }
+
+        return await OfferAudioServiceRestartAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public bool IsDeviceEnabled(AudioDeviceInfo device)
     {
-        RequireRenderDevice(device);
+        ArgumentNullException.ThrowIfNull(device);
         var fxKeyPath = FxPropertiesKeyPath(device);
 
         // AC5 [VM-VERIFIED]: ,5 takes precedence; ,1 is consulted only when ,5 is absent
@@ -217,7 +279,7 @@ public sealed class ApoInstallService : IApoInstallService
     {
         // The newly registered APO is only used after the Windows Audio service restarts [DOC]
         // (install-ref §Installation tutorial step 4). Whether a service restart alone — no
-        // reboot — reliably suffices is NEEDS-VM-VERIFICATION (research-notes §4/§11).
+        // reboot — reliably suffices is vm-verified (research-notes §11).
         if (!await _interaction.ConfirmSystemChangeAsync(
                 SystemChange.RestartAudioService,
                 "Restart the Windows audio service now so Equalizer APO becomes active? " +
@@ -227,11 +289,23 @@ public sealed class ApoInstallService : IApoInstallService
             return InstallOutcome.SucceededPendingRestart; // never restart silently (AC2)
         }
 
-        var exitCode = await _processRunner
-            .RunElevatedAsync("cmd.exe", "/c net stop audiosrv && net start audiosrv", cancellationToken)
-            .ConfigureAwait(false);
+        // Two separate elevated calls so net stop failures do not suppress net start.
+        // Running net.exe directly (not via cmd.exe /c) improves the UAC-prompt clarity.
+        var isUacCancelled = false;
 
-        return exitCode == IProcessRunner.UacCancelledExitCode
+        var stopExit = await _processRunner
+            .RunElevatedAsync("net.exe", "stop audiosrv /y", cancellationToken)
+            .ConfigureAwait(false);
+        if (stopExit == IProcessRunner.UacCancelledExitCode)
+            isUacCancelled = true;
+
+        var startExit = await _processRunner
+            .RunElevatedAsync("net.exe", "start audiosrv", cancellationToken)
+            .ConfigureAwait(false);
+        if (startExit == IProcessRunner.UacCancelledExitCode)
+            isUacCancelled = true;
+
+        return isUacCancelled
             ? InstallOutcome.SucceededPendingRestart
             : InstallOutcome.Succeeded;
     }
@@ -309,8 +383,11 @@ public sealed class ApoInstallService : IApoInstallService
         }
     }
 
-    private static string FxPropertiesKeyPath(AudioDeviceInfo device) =>
-        $@"{AudioDeviceService.MmDevicesAudioKeyPath}\Render\{device.EndpointGuid}\FxProperties";
+    private static string FxPropertiesKeyPath(AudioDeviceInfo device)
+    {
+        var branch = device.Flow == DeviceFlow.Render ? "Render" : "Capture";
+        return $@"{AudioDeviceService.MmDevicesAudioKeyPath}\{branch}\{device.EndpointGuid}\FxProperties";
+    }
 
     private static void RequireRenderDevice(AudioDeviceInfo device)
     {

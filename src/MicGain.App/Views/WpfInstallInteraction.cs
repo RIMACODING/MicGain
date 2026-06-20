@@ -21,6 +21,7 @@ public sealed class WpfInstallInteraction : IInstallInteraction
         var title = change switch
         {
             SystemChange.RunInstaller => "MicGain — Run the Equalizer APO installer?",
+            SystemChange.RunConfigurator => "MicGain — Launch the Configurator to enable APO?",
             SystemChange.WriteRegistry => "MicGain — Change audio registry settings?",
             SystemChange.RestartAudioService => "MicGain — Restart the Windows audio service?",
             _ => "MicGain — Approve system change?",
@@ -36,13 +37,18 @@ public sealed class WpfInstallInteraction : IInstallInteraction
     {
         // Blocks until the user confirms they finished the Configurator step. Enablement is
         // then verified by ApoInstallService.IsDeviceEnabled (AC5) — this dialog itself
-        // performs no system change. Exact wording/UX on a real machine: NEEDS-VM-VERIFICATION.
+        // performs no system change. Sequence VM-verified 2025-06-13: Configurator runs its
+        // setup workflow first; the "Select your device" window appears at the END.
+        var deviceKind = device.Flow == DeviceFlow.Capture ? "input" : "output";
         ShowOnUiThread(
-            "The Equalizer APO Configurator should now be open (it is launched by the installer).\n\n" +
-            "In the Configurator window:\n" +
-            "  1. Tick the checkbox next to your output device:\n\n" +
+            "The Equalizer APO Configurator is now opening.\n\n" +
+            "Configurator will go through its setup workflow first.\n" +
+            "AT THE END, a \"Select your device\" window will appear.\n\n" +
+            "In that window:\n" +
+            $"  1. Tick the checkbox next to your {deviceKind} device:\n\n" +
             $"          {device.FriendlyName}\n\n" +
-            "  2. Click OK to close the Configurator.\n\n" +
+            "  2. Click OK to confirm your device selection.\n" +
+            "  3. Click OK again to close the Configurator.\n\n" +
             "When you have done both, click OK here to continue.",
             "MicGain — Select your device in the Configurator",
             MessageBoxButton.OK, MessageBoxImage.Information, MessageBoxResult.OK);

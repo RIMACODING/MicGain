@@ -60,9 +60,11 @@ public sealed class ApoInstallServiceTests
         var outcome = await service.RunGuidedInstallAsync(Speakers());
 
         Assert.Equal(InstallOutcome.Succeeded, outcome);
-        Assert.Equal(2, _processRunner.Launched.Count);
+        Assert.Equal(3, _processRunner.Launched.Count);
         Assert.Equal((InstallerPath, "/S"), _processRunner.Launched[0]);
-        Assert.Contains("audiosrv", _processRunner.Launched[1].Arguments);
+        // Two separate net.exe calls: stop then start (no && short-circuit).
+        Assert.Equal(("net.exe", "stop audiosrv /y"), _processRunner.Launched[1]);
+        Assert.Equal(("net.exe", "start audiosrv"), _processRunner.Launched[2]);
         Assert.Equal(1, _interaction.ConfiguratorWaits);
         // AC2: each system change was individually consented, in order.
         Assert.Equal(

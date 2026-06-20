@@ -27,6 +27,9 @@ public enum SystemChange
     /// <summary>Execute the bundled Equalizer APO installer (elevated).</summary>
     RunInstaller,
 
+    /// <summary>Launch Equalizer APO Configurator (elevated) to enable a device without reinstalling.</summary>
+    RunConfigurator,
+
     /// <summary>HKLM registry writes: FxProperties enablement, Child APOs backup, DisableProtectedAudioDG.</summary>
     WriteRegistry,
 

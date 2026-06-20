@@ -13,6 +13,7 @@ public sealed class FakeInstallInteraction : IInstallInteraction
     public Dictionary<SystemChange, bool> Consents { get; } = new()
     {
         [SystemChange.RunInstaller] = true,
+        [SystemChange.RunConfigurator] = true,
         [SystemChange.WriteRegistry] = true,
         [SystemChange.RestartAudioService] = true,
     };

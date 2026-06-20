@@ -15,35 +15,41 @@ public enum AppState
 }
 
 /// <summary>
-/// Main window ViewModel: detect Equalizer APO, list capture devices (microphones) with
-/// friendly name + GUID, and host one <see cref="DeviceGainViewModel"/> per device.
+/// Main window ViewModel: list capture devices (microphones) with friendly name + GUID
+/// and host one <see cref="DeviceGainViewModel"/> per device.
+/// The caller (App.xaml.cs) provides the pre-detected config path so detection runs
+/// exactly once at startup and the main window never re-detects on initial load.
+/// On Refresh, re-detection runs via the detection service if provided.
 /// Pure BCL types only, so it is unit-testable with mocked Core services.
 /// </summary>
 public sealed class MainViewModel : ViewModelBase
 {
-    private readonly IApoDetectionService _detectionService;
+    private readonly string _configPath;
+    private readonly IApoDetectionService? _detectionService;
     private readonly IAudioDeviceService _deviceService;
     private readonly Func<string, IApoConfigService> _configServiceFactory;
     private readonly TimeSpan? _debounceInterval;
     private readonly Func<TimeSpan, CancellationToken, Task>? _delay;
-    private readonly SemaphoreSlim _writeLock = new(1, 1); // one config write at a time, app-wide
+    private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     private AppState _state = AppState.Loading;
     private string? _statusMessage;
 
-    /// <param name="configServiceFactory">
-    /// Creates the config service from the detected config directory — the directory is only
-    /// known after detection succeeds and is always taken from the registry, never hardcoded.
-    /// </param>
+    /// <param name="configPath">Pre-detected Equalizer APO config directory (from the registry, never hardcoded).</param>
+    /// <param name="detectionService">Used only on Refresh to re-verify APO presence. Nullable for tests.</param>
+    /// <param name="deviceService">Audio device enumerator.</param>
+    /// <param name="configServiceFactory">Creates the config service from the config directory.</param>
     /// <param name="debounceInterval">Override for tests; null uses the production default.</param>
     /// <param name="delay">Delay strategy override for tests; null uses Task.Delay.</param>
     public MainViewModel(
-        IApoDetectionService detectionService,
+        string configPath,
+        IApoDetectionService? detectionService,
         IAudioDeviceService deviceService,
         Func<string, IApoConfigService> configServiceFactory,
         TimeSpan? debounceInterval = null,
         Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
+        _configPath = configPath;
         _detectionService = detectionService;
         _deviceService = deviceService;
         _configServiceFactory = configServiceFactory;
@@ -62,7 +68,6 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _state, value);
     }
 
-    /// <summary>Non-blocking status line; write/read failures land here instead of dialogs.</summary>
     public string? StatusMessage
     {
         get => _statusMessage;
@@ -77,17 +82,21 @@ public sealed class MainViewModel : ViewModelBase
 
         try
         {
-            var detection = await Task.Run(_detectionService.Detect);
-            if (!detection.IsInstalled)
+            // On Refresh, re-verify APO is still installed. On initial load, skip — the
+            // caller already confirmed APO is installed and provided the config path.
+            if (_detectionService is not null)
             {
-                State = AppState.ApoNotInstalled;
-                return;
+                var recheck = await Task.Run(_detectionService.Detect);
+                if (!recheck.IsInstalled)
+                {
+                    State = AppState.ApoNotInstalled;
+                    return;
+                }
             }
 
-            var configService = _configServiceFactory(detection.ConfigPath!);
+            var configService = _configServiceFactory(_configPath);
             var allDevices = await Task.Run(_deviceService.GetDevices);
 
-            // Issue #4 scope: the main window lists capture devices (microphones) only.
             var captureDevices = allDevices.Where(d => d.Flow == DeviceFlow.Capture).ToList();
             if (captureDevices.Count == 0)
             {
@@ -121,7 +130,6 @@ public sealed class MainViewModel : ViewModelBase
     {
         try
         {
-            // null = device not managed by MicGain yet (lenient reader) → default gain.
             return configService.ReadGain(device.EndpointGuid);
         }
         catch (Exception ex)

@@ -69,8 +69,10 @@ public sealed class InstallConsentViewModelTests
     }
 
     [Fact]
-    public void AcceptCommand_TransitionsToReadyStub_AndRequestsClose()
+    public void AcceptCommand_TransitionsToInstalling_AndRequestsClose()
     {
+        // T2.2 (issue #3): Accept transitions to Installing; the install flow then drives
+        // CompleteInstall() → Ready or FailInstall() → InstallFailed.
         AddRender(SpeakersGuid, "Speakers", isDefault: true);
         var viewModel = CreateInitializedViewModel();
         var closeRequests = 0;
@@ -78,7 +80,7 @@ public sealed class InstallConsentViewModelTests
 
         viewModel.AcceptCommand.Execute(null);
 
-        Assert.Equal(InstallFlowState.Ready, viewModel.State);
+        Assert.Equal(InstallFlowState.Installing, viewModel.State);
         Assert.Equal(1, closeRequests);
     }
 
@@ -134,15 +136,17 @@ public sealed class InstallConsentViewModelTests
     }
 
     [Fact]
-    public void DialogClosedAfterAccept_KeepsReadyState()
+    public void DialogClosedAfterAccept_KeepsInstallingState()
     {
+        // Closing the dialog after Accept does not override the Installing state — the install
+        // flow has already been handed off to App.xaml.cs.
         AddRender(SpeakersGuid, "Speakers", isDefault: true);
         var viewModel = CreateInitializedViewModel();
         viewModel.AcceptCommand.Execute(null);
 
         viewModel.HandleDialogClosed();
 
-        Assert.Equal(InstallFlowState.Ready, viewModel.State);
+        Assert.Equal(InstallFlowState.Installing, viewModel.State);
     }
 
     [Fact]

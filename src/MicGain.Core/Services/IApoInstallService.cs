@@ -32,9 +32,19 @@ public interface IApoInstallService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Launches Equalizer APO's <c>Configurator.exe</c> (elevated) so the user can enable APO
+    /// on a device without running the full installer. Used when APO is already installed but
+    /// no device has it enabled. After the Configurator closes, enablement is verified and
+    /// a consented audio-service restart is offered.
+    /// </summary>
+    Task<InstallOutcome> RunConfiguratorOnlyAsync(
+        AudioDeviceInfo device,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// AC5 [VM-VERIFIED]: <c>true</c> iff the device's FxProperties LFX slot holds the
     /// Equalizer APO CLSID — <c>,5</c> checked first, <c>,1</c> consulted only when <c>,5</c>
-    /// is absent (dev-ref precedence rule).
+    /// is absent (dev-ref precedence rule). Works for both render and capture devices.
     /// </summary>
     bool IsDeviceEnabled(AudioDeviceInfo device);
 }

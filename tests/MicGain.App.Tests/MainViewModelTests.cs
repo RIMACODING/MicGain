@@ -18,8 +18,11 @@ public sealed class MainViewModelTests
     private readonly FakeApoConfigService _config = new();
     private readonly List<string> _factoryCalls = new();
 
+    /// <summary>Config path used in tests — matches Installed() fixture below.</summary>
+    private const string TestConfigPath = @"C:\cfg";
+
     private MainViewModel CreateViewModel() =>
-        new(_detection, _devices,
+        new(TestConfigPath, _detection, _devices,
             configDirectory =>
             {
                 _factoryCalls.Add(configDirectory);
@@ -54,13 +57,14 @@ public sealed class MainViewModelTests
 
         await CreateViewModel().LoadAsync();
 
-        Assert.Equal(new[] { @"D:\Apps\APO\config" }, _factoryCalls);
+        // Config path is passed from the constructor, not from re-detection.
+        Assert.Equal(new[] { TestConfigPath }, _factoryCalls);
     }
 
     [Fact]
     public async Task LoadAsync_NoCaptureDevices_SetsNoCaptureDevicesState()
     {
-        _detection.Result = ApoDetectionResult.Installed(@"C:\cfg");
+        _detection.Result = ApoDetectionResult.Installed(TestConfigPath);
         AddRender(SpeakerGuid);
 
         var vm = CreateViewModel();
@@ -73,7 +77,7 @@ public sealed class MainViewModelTests
     [Fact]
     public async Task LoadAsync_ListsOnlyCaptureDevices_WithNameAndGuid()
     {
-        _detection.Result = ApoDetectionResult.Installed(@"C:\cfg");
+        _detection.Result = ApoDetectionResult.Installed(TestConfigPath);
         AddRender(SpeakerGuid);
         AddCapture(MicGuid1, "USB Microphone", isDefault: true);
         AddCapture(MicGuid2, "Headset Mic", apoEnabled: false);
@@ -86,17 +90,16 @@ public sealed class MainViewModelTests
         Assert.Equal("USB Microphone", vm.Devices[0].FriendlyName);
         Assert.Equal(MicGuid1, vm.Devices[0].EndpointGuid);
         Assert.True(vm.Devices[0].IsApoEnabled);
-        Assert.False(vm.Devices[1].IsApoEnabled); // listed, but its slider is disabled in the view
+        Assert.False(vm.Devices[1].IsApoEnabled);
     }
 
     [Fact]
     public async Task LoadAsync_SliderValuesReflectStoredGains()
     {
-        // Issue #4 persistence criterion: reload → sliders reflect current config files.
-        _detection.Result = ApoDetectionResult.Installed(@"C:\cfg");
+        _detection.Result = ApoDetectionResult.Installed(TestConfigPath);
         _config.StoredGains[MicGuid1] = -12;
         AddCapture(MicGuid1);
-        AddCapture(MicGuid2); // not managed yet → default gain
+        AddCapture(MicGuid2);
 
         var vm = CreateViewModel();
         await vm.LoadAsync();
@@ -108,7 +111,7 @@ public sealed class MainViewModelTests
     [Fact]
     public async Task LoadAsync_StoredGainOutsideRange_IsClamped()
     {
-        _detection.Result = ApoDetectionResult.Installed(@"C:\cfg");
+        _detection.Result = ApoDetectionResult.Installed(TestConfigPath);
         _config.StoredGains[MicGuid1] = -100;
         AddCapture(MicGuid1);
 
@@ -121,8 +124,7 @@ public sealed class MainViewModelTests
     [Fact]
     public async Task LoadAsync_NeverWritesConfig()
     {
-        // Issue #4 / MAIN PLAN: the app never writes config without user slider interaction.
-        _detection.Result = ApoDetectionResult.Installed(@"C:\cfg");
+        _detection.Result = ApoDetectionResult.Installed(TestConfigPath);
         _config.StoredGains[MicGuid1] = -6;
         AddCapture(MicGuid1);
         AddCapture(MicGuid2);
@@ -136,7 +138,7 @@ public sealed class MainViewModelTests
     [Fact]
     public async Task DeviceWriteFailure_SurfacesAsNonBlockingStatusMessage()
     {
-        _detection.Result = ApoDetectionResult.Installed(@"C:\cfg");
+        _detection.Result = ApoDetectionResult.Installed(TestConfigPath);
         AddCapture(MicGuid1, "USB Microphone");
         var vm = CreateViewModel();
         await vm.LoadAsync();
@@ -145,7 +147,7 @@ public sealed class MainViewModelTests
         vm.Devices[0].GainDb = -3;
         await vm.Devices[0].PendingWrite;
 
-        Assert.Equal(AppState.Ready, vm.State); // app stays usable — non-blocking error
+        Assert.Equal(AppState.Ready, vm.State);
         Assert.NotNull(vm.StatusMessage);
         Assert.Contains("disk full", vm.StatusMessage);
         Assert.Contains("USB Microphone", vm.StatusMessage);
