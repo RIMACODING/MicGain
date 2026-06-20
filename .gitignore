@@ -16,8 +16,7 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
-publish/
-
+# publish/  ← un-ignored so the compiled demo binary ships with the repo
 # Visual Studio files
 .vs/
 *.user
@@ -67,7 +66,7 @@ nunit-*.xml
 coverage*/
 
 # Publish
-**/publish/
+# **/publish/  ← un-ignored for compiled demo
 **/PublishProfiles/
 
 # Windows
