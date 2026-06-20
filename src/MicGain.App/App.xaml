@@ -1,9 +1,0 @@
-<Application x:Class="MicGain.App.App"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             ShutdownMode="OnExplicitShutdown">
-    <!-- No StartupUri: OnStartup decides between the main window and the install-consent
-         flow (T2.1). OnExplicitShutdown keeps the app alive across dialog/message boxes;
-         every flow path ends in an explicit Shutdown(). -->
-    <Application.Resources />
-</Application>
